@@ -1,15 +1,13 @@
 package com.example.lead_genX.auth.service;
 
-import CustomException.BusinessException;
-import CustomException.ResourceNotFoundException;
-import com.example.lead_genX.auth.dto.Userdto;
+import com.example.lead_genX.CustomException.BusinessException;
+import com.example.lead_genX.CustomException.ResourceNotFoundException;
 import com.example.lead_genX.auth.entiy.UserEntity;
 import com.example.lead_genX.auth.replydto.UserReplydto;
 import com.example.lead_genX.auth.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 @Service
 public class UserService {
@@ -53,4 +51,3 @@ public void updatePassword(String email,String password){
     save(userByEmail);
 }
 }
-
