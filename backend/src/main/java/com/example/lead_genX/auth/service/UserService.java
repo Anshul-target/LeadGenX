@@ -3,7 +3,6 @@ package com.example.lead_genX.auth.service;
 import com.example.lead_genX.CustomException.BusinessException;
 import com.example.lead_genX.CustomException.ResourceNotFoundException;
 import com.example.lead_genX.auth.entiy.UserEntity;
-import com.example.lead_genX.auth.replydto.RegisterReplydto;
 import com.example.lead_genX.auth.replydto.UserReplydto;
 import com.example.lead_genX.auth.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -57,7 +56,9 @@ public void updatePassword(String email,String password){
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        return null;
+        UserEntity user = findUserByEmail(username);
+
+        return new AuthUserService(user);
 
     }
 }
