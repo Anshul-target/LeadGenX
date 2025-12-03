@@ -5,6 +5,8 @@ import com.example.lead_genX.CustomException.ResourceNotFoundException;
 import com.example.lead_genX.auth.entiy.UserEntity;
 import com.example.lead_genX.auth.replydto.UserReplydto;
 import com.example.lead_genX.auth.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -15,7 +17,7 @@ import java.time.LocalDateTime;
 @Service
 public class UserService implements UserDetailsService {
 UserRepository userRepository;
-
+@CacheEvict(value = "users",key = "#userEntity.email")
 public UserReplydto save(UserEntity userEntity){
 try {
 
@@ -38,6 +40,7 @@ throw new BusinessException("Failed to save the user: "+ e.getMessage());
 public void findUserExistById(String id){
     userRepository.findById(id).orElseThrow(()->new ResourceNotFoundException("No user exists of this id"));
 }
+@CacheEvict(value = "users",key = "#id")
 public void deleteUser(String id){
     findUserExistById(id);
     userRepository.deleteById(id);
@@ -49,12 +52,14 @@ public UserEntity findUserByEmail(String email){
             );
     return user;
 }
+@CacheEvict(value = "users",key = "#email")
 public void updatePassword(String email,String password){
     UserEntity userByEmail = findUserByEmail(email);
     save(userByEmail);
 }
 
     @Override
+    @Cacheable(value = "users",key = "#username")
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         UserEntity user = findUserByEmail(username);
 

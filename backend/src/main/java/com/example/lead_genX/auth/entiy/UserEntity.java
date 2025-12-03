@@ -19,6 +19,8 @@ private String id;
     private String password;
     private String role="User";
     private LocalDateTime createdAt;
+    private String token;
+    private LocalDateTime tokenExpiryDate;
 
     public static UserEntity toEntity(Userdto userdto){
         return UserEntity.builder()
