@@ -44,24 +44,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 
-    // -------------------------------------------------------------------------
-    // 3. AUTHENTICATION & AUTHORIZATION
-    // -------------------------------------------------------------------------
-//    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
-//    public ResponseEntity<?> handleAuthError(Exception ex) {
-//        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-//                .body("Authentication failed: " + ex.getMessage());
-//    }
-//
-//    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-//    public ResponseEntity<?> handleAccessDenied(Exception ex) {
-//        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-//                .body("You are not allowed to perform this action.");
-//    }
 
-    // -------------------------------------------------------------------------
+
+
     // 4. RESOURCE NOT FOUND
-    // -------------------------------------------------------------------------
 
 
     @ExceptionHandler(ResourceNotFoundException.class)

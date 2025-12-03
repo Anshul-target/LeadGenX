@@ -3,14 +3,18 @@ package com.example.lead_genX.auth.service;
 import com.example.lead_genX.CustomException.BusinessException;
 import com.example.lead_genX.CustomException.ResourceNotFoundException;
 import com.example.lead_genX.auth.entiy.UserEntity;
+import com.example.lead_genX.auth.replydto.RegisterReplydto;
 import com.example.lead_genX.auth.replydto.UserReplydto;
 import com.example.lead_genX.auth.repository.UserRepository;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
 @Service
-public class UserService {
+public class UserService implements UserDetailsService {
 UserRepository userRepository;
 
 public UserReplydto save(UserEntity userEntity){
@@ -50,4 +54,10 @@ public void updatePassword(String email,String password){
     UserEntity userByEmail = findUserByEmail(email);
     save(userByEmail);
 }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return null;
+
+    }
 }
