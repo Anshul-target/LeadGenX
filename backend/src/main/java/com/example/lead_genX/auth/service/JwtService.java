@@ -1,5 +1,6 @@
 package com.example.lead_genX.auth.service;
 
+import com.example.lead_genX.auth.entiy.UserEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -40,22 +41,20 @@ public class JwtService {
 
 
 
-    public String generateAccessToken(UserDetails userDetails) {
+    public String generateAccessToken(UserEntity user) {
         Map<String, Object> claims = new HashMap<>();
 
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toList());
+        String roles=user.getRole();
         claims.put("roles", roles);
 
-        return buildToken(claims, userDetails.getUsername(), accessTokenValidity);
+        return buildToken(claims, user.getEmail(), accessTokenValidity);
     }
 
 
-    public String generateRefreshToken(UserDetails userDetails) {
+    public String generateRefreshToken(UserEntity userDetails) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("typ", "refresh");
-        return buildToken(claims, userDetails.getUsername(), refreshTokenValidity);
+        return buildToken(claims, userDetails.getEmail(), refreshTokenValidity);
     }
 
     private String buildToken(Map<String, Object> extraClaims, String subject, Duration validity) {

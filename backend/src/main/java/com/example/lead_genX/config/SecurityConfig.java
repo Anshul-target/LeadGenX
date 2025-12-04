@@ -2,6 +2,7 @@ package com.example.lead_genX.config;
 
 import com.example.lead_genX.auth.entiy.UserEntity;
 import com.example.lead_genX.auth.service.UserService;
+import com.example.lead_genX.filter.RouteFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
