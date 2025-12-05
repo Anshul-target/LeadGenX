@@ -1,0 +1,69 @@
+
+What does CallerRunsPolicy do exactly?
+
+If the pool is overloaded, instead of dropping the task, it will:
+
+➡️ Run the task on the calling thread.
+
+So if your thread pool is full, the thread that called your async method will temporarily do the work.
+
+Example:
+
+Your controller calls:
+
+emailService.sendPasswordResetEmail(...);
+
+
+If the pool is at capacity:
+
+Instead of rejecting the email task
+
+Spring will run the email sending logic inside the controller thread
+
+This means:
+
+The email still gets sent ✔
+
+No task is lost ✔
+
+The system slows slightly to avoid meltdown ✔
+
+You avoid queue explosions and OOM errors ✔
+
+It is a safe fallback mode.
+Request 121: caller thread runs email
+Request 122: its own caller thread runs email
+Request 123: its own caller thread runs email
+...
+Request 500: its own caller thread runs email
+📌 So how many run at the same time?
+
+It depends on:
+
+✔ How many HTTP requests arrive at exactly the same time
+
+(because each one has its own thread)
+
+✔ Your server thread pool size
+
+(usually 200+ in production)
+
+So even if async pool is full:
+
+Async threads = 0 free
+
+Queue = full
+
+But HTTP request threads = still available
+
+Those HTTP threads run the tasks in parallel, but each runs only its own task.
+
+🎯 SUPER SIMPLE SUMMARY
+✔ Requests 1–20 → async threads
+✔ Requests 21–120 → async queue
+✔ Requests 121–500 → caller threads
+
+(but caller threads = one per HTTP request)
+
+❌ They do NOT run all at once in one big batch
+✔ They run one by one per incoming request thread

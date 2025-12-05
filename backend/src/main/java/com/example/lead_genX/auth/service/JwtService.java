@@ -43,7 +43,7 @@ public class JwtService {
 
     public String generateAccessToken(UserEntity user) {
         Map<String, Object> claims = new HashMap<>();
-
+claims.put("tokenVersion",user.getTokenVersion());
         String roles=user.getRole();
         claims.put("roles", roles);
 
@@ -80,6 +80,10 @@ public class JwtService {
         return extractClaim(token, Claims::getSubject);
     }
 
+    public Integer extractTokenVersion(String token) {
+        return extractClaim(token, claims -> claims.get("tokenVersion", Integer.class));
+    }
+
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
@@ -99,29 +103,30 @@ public class JwtService {
         return exp.before(Date.from(Instant.now()));
     }
 
-    /**
-     * Validates token for the provided user details.
-     * Checks signature (implicitly via parse) + subject + expiration.
-     */
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
             final String username = extractUsername(token);
-            return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+            if (!username.equals(userDetails.getUsername())) return false;
+            if (isTokenExpired(token)) return false;
+
+
+            Integer tokenVersionFromToken = extractTokenVersion(token);
+            UserEntity user = (UserEntity) userDetails;
+            Integer currentVersion = user.getTokenVersion();
+
+            return Objects.equals(tokenVersionFromToken, currentVersion);
+
         } catch (Exception e) {
-            // parsing exceptions (signature invalid, malformed, expired) will be handled here
             return false;
         }
     }
 
-    // --------------------------
-    // Optional helpers (roles)
-    // --------------------------
 
-    /**
-     * Extract roles stored in token as List<String>.
-     * Returns empty list if claim absent or not a list.
-     */
-    @SuppressWarnings("unchecked")
+
+
+
+
+
     public List<String> extractRoles(String token) {
         try {
             Object rolesObj = extractClaim(token, claims -> claims.get("roles"));
@@ -135,5 +140,9 @@ public class JwtService {
         } catch (Exception e) {
             return Collections.emptyList();
         }
+    }
+
+    public void revokeAllTokensForUser(UserEntity user) {
+      user.setTokenVersion(user.getTokenVersion()+1);
     }
 }

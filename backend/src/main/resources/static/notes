@@ -1,0 +1,487 @@
+************* Password Reset High-Level************
+
+Client POST /auth/forgot-password with { "email": "..." }. Server always returns 200 (no user enumeration).
+If user exists: generate strong raw token, hash (SHA-256) and store only the hash in MongoDB with expiresAt and used=false. Send the raw token in an email link asynchronously.
+
+User opens front-end reset page with token from query param → front-end POSTs { token, newPassword } to POST /auth/reset-password.
+
+Server atomically finds the token (hash), checks used=false and expiresAt > now, marks it used=true in one DB operation (prevents reuse/race),
+updates password (BCrypt), increments
+ tokenVersion/updates lastPasswordReset
+ to revoke existing JWTs, deletes or
+  leaves used token for audit, and
+   sends notification email.
+
+
+
+🔥 Putting it all together
+Full sequence (backend side)
+
+User submits token + new password
+
+Backend hashes the token
+
+Backend atomically finds the token and marks it used
+
+If token invalid/expired/used → reject
+
+Backend loads the user
+
+Backend bcrypt-hashes new password
+
+Backend revokes all active sessions/JWTs
+
+Backend notifies user by email
+
+Backend responds “Password changed successfully”
+
+
+
+🎯 Why this whole process is “production level”?
+
+Because it handles:
+
+✔️ Race conditions
+
+(atomic update prevents reuse)
+
+✔️ Secure storage of tokens
+
+(only token hash stored)
+
+✔️ Token expiration (TTL index)
+✔️ Single-use tokens
+
+(“used” flag)
+
+✔️ JWT/session revocation
+
+(prevent attackers with old tokens from keeping access)
+
+✔️ User notification
+
+(password change email)
+
+✔️ No user enumeration
+
+(forgot-password always returns success)
+
+✔️ Timing-safe, cryptographically strong token generation
+✔️ Protects against DB leaks
+
+(hash only)
+
+These are the same techniques used by:
+
+Google
+
+GitHub
+
+Facebook
+
+AWS
+
+Stripe
+
+
+
+
+When the user submits the reset form with a token + new password,
+something like this happens:
+
+POST /reset-password
+{
+    "token": "<raw token from email>",
+    "newPassword": "..."
+}
+
+
+Your backend must:
+
+✔️ Find the token by hashed version
+
+Hash the raw token → match against DB.
+
+✔️ Check these conditions:
+
+Token exists
+
+used == false (has not been used already)
+
+expiresAt > now() (not expired)
+
+✔️ AND mark it used=true in the same MongoDB operation
+
+This is atomic:
+find + validate + update = one single database command.
+
+If ANY of those checks fail, the DB returns null.
+
+This prevents:
+
+Token reuse
+
+Race conditions (two fast requests resetting at same time)
+
+Multiple password resets from the same link
+
+
+✅ 3. After token is used → update the password
+Now the password is changed:
+
+user.setPassword(passwordEncoder.encode(newPassword));
+
+
+This ensures:
+
+bcrypt hashing
+
+salted hashing
+
+no plain text
+
+✅ 4. Revoke all existing sessions / JWTs
+
+This is CRITICAL for real security.
+If a user resets their password, any attacker who already had a JWT should instantly lose access.
+
+Production JWT revocation strategies:
+
+Option A — tokenVersion
+
+Store tokenVersion inside the user document
+
+Include it in every JWT during creation
+
+On password reset: user.tokenVersion++
+
+Any past JWT is invalid because the version is old
+
+Option B — lastPasswordChange timestamp
+
+Store lastPasswordChange in user
+
+When validating JWT:
+
+token’s iat must be after lastPasswordChange
+
+If user resets password → update timestamp → invalidate all old tokens
+
+Either option is industry best practice.
+
+✅ 5. Send the user a password-changed notification
+
+Security concept:
+If someone resets your password without your knowledge, you must be warned.
+
+So after everything is successful:
+
+We want to alert the user: “Your password has been changed. If you didn’t request this, contact support.”
+
+
+This protects the user.
+
+
+*****************************Revoke Tokens*******************************************
+
+
+When we “revoke tokens,” we mean:
+
+Make all existing login tokens (JWTs, refresh tokens, sessions) invalid so they can no longer be used.
+
+This is important when:
+
+A user resets their password
+
+A user logs out from all devices
+
+A user account is hacked
+
+A refresh token is stolen
+
+Admin forces logout
+
+🟥 Why Do We Need Token Revocation?
+
+A JWT (JSON Web Token):
+
+is self-contained
+
+does NOT need to be stored on the server
+
+can be used until it expires
+
+This creates a problem:
+
+❗ If a hacker steals a JWT, they can keep using it until it expires.
+
+Unless you have token revocation, you cannot stop them.
+
+So you need a way to say:
+
+“Every token created before this time / version is invalid
+
+
+Method 1: tokenVersion (recommended)
+
+Each user has a field:
+
+tokenVersion: 1
+
+
+When you create a JWT:
+
+The token contains tokenVersion = 1
+
+When you want to revoke all tokens (like after password reset):
+tokenVersion++
+
+
+Now tokenVersion becomes 2.
+
+What happens?
+
+All old JWTs have version 1 → ❌ INVALID
+
+New JWTs have version 2 → ✔ VALID
+
+The backend checks:
+
+if (jwt.tokenVersion != user.tokenVersion)
+    reject token
+
+✔ Fast
+✔ Simple
+✔ Works perfectly
+✔ Zero database lookups needed
+
+
+
+
+
+🟩 Method 2: lastPasswordChange timestamp
+
+Every JWT includes an “issued at” time (iat).
+
+Each user record stores:
+
+lastPasswordChange: 2025-01-01T12:00:00Z
+
+
+When validating JWT:
+
+if (jwt.iat < user.lastPasswordChange)
+    reject token
+
+When user resets password:
+lastPasswordChange = now()
+
+
+This means:
+
+All old tokens (created before this time) are INVALID
+
+Any hacker with stolen token gets kicked out
+
+New tokens are valid
+
+🟧 Why Token Revocation Is Needed?
+
+Let’s say a hacker steals a user’s JWT.
+
+The JWT is valid for 1 hour.
+
+EVEN if the user resets their password:
+
+Without revocation → hacker can still use that JWT for 1 hour
+
+With revocation → hacker is kicked out immediately
+
+This is why it’s critical.
+
+
+
+****************************************Why we should not sign the token JWT using the password***************************
+Ah — I see **exactly** where the misunderstanding is happening.
+
+You are correct about one thing:
+**JWTs are signed, not encrypted.**
+
+But let’s make this 100% clear because this is where the confusion lies:
+
+---
+
+# ❗✔ **JWT SIGNING ≠ JWT ENCRYPTION**
+
+Signing **protects integrity**, NOT **confidentiality**.
+
+Let me explain:
+
+### ✔ Signing (HMAC or RSA):
+
+* Ensures the token **was not modified**
+* Ensures the token was created by the server
+* Ensures authenticity
+
+### ❌ Signing does NOT hide the contents.
+
+Anyone can decode the JWT payload **even if it is signed with RSA/private key**.
+
+Repeat:
+**Signing NEVER hides data. It only prevents tampering.**
+
+---
+
+# ⭐ **Proof (Do this yourself)**
+
+Take ANY signed JWT (HS256 or RS256) and paste it into:
+
+👉 [https://jwt.io/](https://jwt.io/)
+
+You will ALWAYS be able to see:
+
+* username
+* email
+* roles
+* ANY custom claims
+
+BECAUSE THE PAYLOAD IS NOT ENCRYPTED.
+
+Only the signature (third part of the JWT) uses your private key.
+
+The payload is simply Base64URL encoded — **not encrypted**.
+
+---
+
+# 🟥 Example
+
+A JWT looks like this:
+
+```
+header.payload.signature
+```
+
+Decode payload:
+
+```
+{
+  "sub": "john",
+  "roles": ["USER"],
+  "passwordHash": "$2a$10..."
+}
+```
+
+Even though RSA is used for signing:
+
+👉 Anyone can read this JSON payload.
+
+They just can’t modify it without breaking the signature.
+
+---
+
+# ❗ WHY YOU CAN'T PUT PASSWORD OR HASH IN JWT
+
+Because:
+
+### 1. **The payload is readable**
+
+Attackers can decode any JWT and see the contents.
+Signed ≠ encrypted.
+
+### 2. **Password hash must never be exposed**
+
+Even though bcrypt hashes are slow to crack,
+publishing them is a serious security risk.
+
+### 3. **It breaks OWASP and every auth standard**
+
+No secure system puts password hashes inside access tokens.
+
+---
+
+# 🟩 Why private key does NOT protect the payload
+
+When you use RSA signing:
+
+### ✔ Private Key → creates the signature
+
+### ✔ Public Key → verifies the signature
+
+### ❌ Neither of them encrypts the payload
+
+The payload is **NOT encrypted** at all.
+
+It’s just Base64URL encoded — which anyone can decode.
+
+---
+
+# 🟦 *So your statement:*
+
+> “No it cannot read it because it is signed using private key.”
+
+### ❌ Incorrect.
+
+Signing **does not** protect the payload.
+Only encryption does.
+
+JWT **Signed (JWS)** → readable
+JWT **Encrypted (JWE)** → hidden payload (rarely used)
+
+Most systems use **JWS**, not **JWE**.
+
+---
+
+# ⭐ *Therefore:*
+
+### ❌ You cannot put password hash in JWT
+
+### ❌ You cannot put sensitive data in JWT
+
+### ❌ You cannot use password hash to invalidate tokens
+
+Because JWT payload is readable to anyone.
+
+---
+
+# 🟩 What you CAN do safely:
+
+Use:
+
+### ✔ tokenVersion
+
+or
+
+### ✔ lastPasswordChange
+
+These values are NOT sensitive, but allow revocation.
+
+---
+
+# ⭐ FINAL SUMMARY
+
+| Concept                             | Truth            |
+| ----------------------------------- | ---------------- |
+| JWT is signed                       | ✔ Yes            |
+| JWT payload is encrypted            | ❌ No             |
+| Anyone can read JWT payload         | ✔ Yes            |
+| Password/password hash safe in JWT  | ❌ Never          |
+| Use password hash to revoke JWT     | ❌ Impossible     |
+| Use tokenVersion/lastPasswordChange | ✔ Correct method |
+
+---
+
+If you want, I can show:
+
+🔹 A live example of decoding your JWT
+🔹 Why JWS ≠ encrypted
+🔹 How JWE (encrypted tokens) work (but rarely used)
+🔹 Best secure design for your system
+
+Just tell me!
+
+
+
+
+
+
+

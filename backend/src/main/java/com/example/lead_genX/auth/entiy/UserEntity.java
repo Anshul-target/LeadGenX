@@ -21,6 +21,7 @@ private String id;
     private LocalDateTime createdAt;
     private String token;
     private LocalDateTime tokenExpiryDate;
+    private  Integer tokenVersion=1;
 
     public static UserEntity toEntity(Userdto userdto){
         return UserEntity.builder()

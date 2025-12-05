@@ -27,8 +27,8 @@ public UserService(UserRepository repository,PasswordEncoder passwordEncoder){
     this.passwordEncoder=passwordEncoder;
 }
 
-    public  void saveToken(UserEntity user, String accessToken) {
-    user.setToken(accessToken);
+    public  void saveToken(UserEntity user, String refreshToken) {
+    user.setToken(refreshToken);
     userRepository.save(user);
     }
 
@@ -79,5 +79,10 @@ public void updatePassword(String email,String password){
 
         return new AuthUserService(user);
 
+    }
+
+    public UserEntity findUserByToken(String accessToken) {
+    UserEntity user =userRepository.findByToken(accessToken).orElseThrow(()->new BusinessException("Invalid token"));
+    return  user;
     }
 }
